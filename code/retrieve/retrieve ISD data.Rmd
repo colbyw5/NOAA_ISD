@@ -1,0 +1,154 @@
+---
+title: "NOAA ISD Data Curation"
+author: "Colby Wilkinson"
+date: "10/31/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(data.table)
+library(threadr)
+```
+
+Setting up collection: reading in the ISD stations for which we need data, and the beginning/ending years of data collection
+
+```{r}
+
+isd_stations_data <- read_csv("../../data/intermediate/locations ISD.csv") %>% 
+  distinct(ISD_station, BEGIN, END) %>% 
+  mutate(BEGIN = str_sub(BEGIN, start = 1, end = 4),
+         END = str_sub(END, start = 1, end = 4))
+```
+
+Creating a directory for temporary data storage during collection, a vector of ISD stations, and a list to hold resulting data files
+
+```{r}
+ISD_stations <- isd_stations_data$ISD_station
+
+isd_data_list <- list()
+
+```
+
+
+The function below downloads the ISD data file for the station/year combination and replace missing value indicators (-9999/9999) with NA
+
+```{r}
+getISD <- function(year, station, directory, save_file = FALSE){
+  
+  isd_data <- tryCatch(
+  
+  {
+    # downloading data
+  
+  url <- paste("ftp://ftp.ncdc.noaa.gov/pub/data/noaa/isd-lite/", year, "/", station, "-", year, ".gz", sep = "")
+  
+  download_ftp_file(file_remote = url,
+                  file_local = paste(directory, station, "-", year, ".gz", sep = ""),
+                  credentials = "anonymous:noaa")
+  
+  # creating dataset
+  
+  isd_data <- read_table(gzfile(paste(directory, station, "-", year, ".gz", sep = "")),
+                           col_names = c("year", "month", "day", "hour", "temp", "dew", "press", "wind_dir", "wind_speed", "sky", "prec_1", "prec_6")) %>% 
+    mutate(station = station,
+           temp = ifelse(temp == -9999 | temp == 9999, NA, temp),
+           dew = ifelse(dew == -9999 | dew == 9999, NA, dew),
+           press = ifelse(press == -9999 | press == 9999, NA, press),
+           wind_speed = ifelse(wind_speed == -9999 | wind_speed == 9999, NA, wind_speed),
+           prec_1 = ifelse(prec_1 == -9999 | prec_1 == 9999, NA, prec_1),
+           prec_6 = ifelse(prec_6 == -9999 | prec_6 == 9999, NA, prec_6),
+           temp = ((temp/10)*(9/5))+32,
+           dew = ((dew/10)*(9/5))+32,
+           press = press/10,
+           wind_speed = wind_speed/10,
+           prec_1 = prec_1/10,
+           prec_6 = prec_6/10,
+           prec_1 = ifelse(prec_1 == -0.1, 0.01, prec_1)) %>% 
+    select(-c(sky, wind_dir, prec_6))
+  
+  # removing NA indicators
+  
+  isd_data[isd_data == -9999 | isd_data == 9999] = NA
+  
+  # saving/deleting data file
+  
+  if (save_file){
+    # do not delete file
+  }else{
+    unlink(paste(directory, "/*", sep = ""))
+  }
+  
+  # close file connections
+  closeAllConnections()
+  
+  return(isd_data)
+  
+  },
+  error = function(cond){
+    
+    message(cond)
+    
+    return(NA)
+    
+  }
+  )
+  
+  return(isd_data)
+}
+
+
+
+```
+
+Below we look over the stations for which we need data, and add the resulting data to the initialized list
+
+```{r, error=FALSE, message=FALSE, warning=FALSE}
+for (station in ISD_stations){
+  
+  # finding beginning/end of station collection
+  
+  begin <- max(isd_stations_data$BEGIN[isd_stations_data$ISD_station == station], 1999)
+  
+  end <- isd_stations_data$END[isd_stations_data$ISD_station == station]
+  
+  for (year in begin:end){
+    
+    isd_data_list[[paste(station, year, sep = "-")]] <- getISD(year = year, station = station, directory = "../../data/raw/")
+    
+  }
+  
+}
+```
+
+Binding the resulting datasets together, saving to a csv file
+
+```{r}
+rbindlist(isd_data_list[!is.na(isd_data_list)]) %>% 
+  head()
+
+```
+
+Adding ISD data to locations: matching to ISD stations, cleaning variables and saving to a csv
+
+```{r}
+fread("../../data/intermediate/locations ISD.csv") %>% 
+  distinct(city, state, ISD_station) %>% 
+  # joining with ISD data
+  left_join(rbindlist(isd_data_list[!is.na(isd_data_list)]) %>% 
+              rename(ISD_station = station)  %>% 
+              mutate(temp = ifelse(temp < -128.6 | temp > 134, NA, temp),
+                     dew = ifelse(dew < -21 | dew > 95, NA, dew),
+                     wind_speed = ifelse(wind_speed == 99.9, NA, wind_speed),
+                     prec_1 = ifelse(prec_1 == 99.9 | prec_1 > 30.5, NA, prec_1)), by = "ISD_station") %>% 
+  group_by(city, state, year, month, day, hour) %>% 
+  summarise(prec_1 = round(mean(prec_1, na.rm = TRUE), digits = 3),
+            temp = round(mean(temp, na.rm = TRUE), digits = 3),
+            dew = round(mean(dew, na.rm = TRUE), digits = 3),
+            press = round(mean(press, na.rm = TRUE), digits = 3),
+            wind_speed = round(mean(wind_speed, na.rm = TRUE), digits = 3)) %>% 
+  ungroup() %>% 
+  write_csv("../../data/final/ISD HOURLY.csv")
+  
+```

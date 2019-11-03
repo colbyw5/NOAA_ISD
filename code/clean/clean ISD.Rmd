@@ -1,0 +1,42 @@
+---
+title: "NOAA ISD Data Curation"
+author: "Colby Wilkinson"
+date: "10/31/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+
+Loading dataset of locations for which we need data: the top 20 cites by population.  Attributes include city, state, fips code, lat/long
+
+```{r}
+locations <- read_csv("../../data/locations/locations.csv") %>% 
+  mutate(state_FIPS = str_pad(state_FIPS, width = 2, side = "left", pad = "0"),
+         county_FIPS = str_pad(county_FIPS, width = 3, side = "left", pad = "0"))
+```
+
+Reading in the current Integrated Surface Data (ISD) stations, made available by NOAA.  Stations that ended collection after 1999 or do not have a state/territory listed are omitted.
+
+```{r}
+stations <- read_csv("../../data/locations/ISD Stations.csv")%>% 
+  select(station_name, station_state, LAT, LON, BEGIN, END, station_zip_code, station_address, ISD_station) %>% 
+  filter(as.numeric(str_sub(END, start = 1, end = 4)) > 1999 & !is.na(station_state))
+```
+
+Locations are matched to ISD stations by state.  Distance is estimated by taking the squared distance between location lat/lon and station lat/lon. After checking a few location/station pairs, we found squared distance of less than 0.5 was a reasonable distance for data collection (<20 miles).  The resulting data was written to a csv file. 
+
+```{r}
+locations %>% 
+ left_join(stations %>%
+              rename(state = station_state), by = "state") %>% 
+  mutate(lat_lon_dist = sqrt((LON-location_lon)^2+(LAT-location_lat)^2)) %>% 
+  filter(lat_lon_dist < 0.4) %>% 
+  write_csv("../../data/intermediate/locations ISD.csv")
+
+```
+
+

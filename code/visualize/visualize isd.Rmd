@@ -1,0 +1,43 @@
+---
+title: "visualize isd"
+author: "Colby Wilkinson"
+date: "11/3/2019"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+```
+
+Reading in data
+
+```{r}
+isd_data <- data.table::fread("../../data/final/ISD HOURLY.csv")
+```
+
+Scatter plot of hourly temp from 1999-2019, by City
+
+```{r}
+isd_data %>% 
+  mutate(date = ymd_h(paste(year, month, day, hour, sep = " "))) %>% 
+  ggplot(aes(x = date, y = temp)) +
+  geom_point() +
+  facet_wrap(~city) +
+  ggsave("../../plots/temp_by_city.jpeg", dpi = 200, width = 5, height = 3, units = "in")
+```
+
+Boxplot of hourly precipitation by month for Boston
+
+```{r}
+isd_data %>% 
+  filter(city == "Boston" & !is.na(month)) %>% 
+  arrange(-month) %>% 
+  mutate(month = as.character(month)) %>% 
+  group_by(year, month) %>% 
+  summarise(prec_month = sum(prec_1, na.rm = TRUE)) %>% 
+  ggplot(aes(x = month, y = prec_month)) +
+  geom_boxplot() +
+  ggsave("../../plots/boston_prec_month.jpeg", width = 5, height = 3, units = "in", dpi = 200)
+```
+
