@@ -4,5 +4,5 @@ Purpose: this repository contains the code neccessary to retrive, clean, quality
 
 Language: R Version 3.5.3
 
-dplyr==0.8.3
-ggplot==3.2.1
+- dplyr==0.8.3
+- ggplot==3.2.1
