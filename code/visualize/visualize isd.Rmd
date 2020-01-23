@@ -16,15 +16,21 @@ Reading in data
 isd_data <- data.table::fread("../../data/final/ISD HOURLY.csv")
 ```
 
-Scatter plot of hourly temp from 1999-2019, by City
+Scatter plot of hourly precipitation from 1999-2019, by City
 
-```{r}
+```{r, dpi=100, fig.width=6, fig.height=10}
 isd_data %>% 
   mutate(date = ymd_h(paste(year, month, day, hour, sep = " "))) %>% 
-  ggplot(aes(x = date, y = temp)) +
-  geom_point() +
-  facet_wrap(~city) +
-  ggsave("../../plots/temp_by_city.jpeg", dpi = 200, width = 5, height = 3, units = "in")
+  ggplot(aes(x = date, y = prec_1)) +
+  geom_line(color="steelblue4") +
+  facet_wrap(~city, nrow = 4) +
+  theme(axis.text = element_text(size = 10)) +
+  theme(strip.text = element_text(size = 16)) +
+  theme(axis.title = element_text(size = 15)) +
+  ylab("Hourly Precipitation (inches)") +
+  xlab("") +
+  theme(axis.text.x=element_text(angle=60, hjust=1)) +
+  ggsave("../../plots/prec_by_city.jpeg", dpi = 200, width = 10, height = 6, units = "in")
 ```
 
 Boxplot of hourly precipitation by month for Boston
