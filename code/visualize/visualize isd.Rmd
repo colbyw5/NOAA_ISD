@@ -47,3 +47,22 @@ isd_data %>%
   ggsave("../../plots/boston_prec_month.jpeg", width = 5, height = 3, units = "in", dpi = 200)
 ```
 
+Monthly precipitation by city in 2015
+
+```{r}
+isd_data %>% 
+  filter(year == 2015) %>% 
+  group_by(city, month) %>% 
+  summarise(prec = sum(prec_1, na.rm = TRUE)) %>% 
+  ggplot(aes(x = month, y = prec, col = city)) +
+  geom_line() +
+  geom_point() +
+  xlab("Month") +
+  ylab("Precipitation") +
+  ggtitle("Monthly Precipitation by City in 2015") +
+  theme(plot.title = element_text(hjust = 0.5, size = 14)) + 
+  scale_colour_discrete(name = "") +
+  scale_x_continuous(breaks = 1:12, labels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"))
+  
+```
+
